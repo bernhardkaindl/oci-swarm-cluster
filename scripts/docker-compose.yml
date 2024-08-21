@@ -37,7 +37,8 @@ services:
                 - traefik.http.services.registry.loadbalancer.server.port=5000
 
     agent:
-        image: portainer/agent
+        # The STS version is needed to work with Docker 0.0.26 (they changed the API!):
+        image: portainer/agent:sts
         environment:
             # REQUIRED: Should be equal to the service name prefixed by "tasks." when
             # deployed inside an overlay network
@@ -55,7 +56,8 @@ services:
                 constraints: [node.platform.os == linux]
 
     portainer:
-        image: portainer/portainer-ce:2.11.1
+        # The STS version is needed to work with Docker 0.0.26 (they changed the API!):
+        image: portainer/portainer-ce:sts
         command: -H tcp://tasks.swarm_agent:9001 --tlsskipverify
         volumes:
             - /var/run/docker.sock:/var/run/docker.sock
@@ -77,7 +79,8 @@ services:
                 - traefik.http.services.portainer.loadbalancer.server.port=9000
 
     traefik:
-        image: traefik:v2.6.1
+        # SwarmMode was changed to another setting in 3.1, so this needs updating for 3.1:
+        image: traefik:v2.11
         ports:
             - target: 80
               published: 80
@@ -100,10 +103,19 @@ services:
             - /var/run/docker.sock:/var/run/docker.sock:ro
             - /var/log/traefik:/var/log/traefik:rw
             - registry:/data
+        labels:
+            - traefik.enable=true
+            - traefik.http.routers.traefik.rule=Host(`traefik.egitmen.me`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))
+            - traefik.http.routers.api.service=api@internal
+            - traefik.http.routers.traefik.entrypoints=https
+            - traefik.http.routers.traefik.tls=true
+            - traefik.http.routers.traefik.tls.certresolver=le
+            - traefik.http.services.portainer.loadbalancer.server.port=8080
         command:
             - --providers.docker
             - --providers.docker.constraints=Label(`traefik.constraint-label`, `traefik-public`)
             - --providers.docker.exposedbydefault=false
+            # SwarmMode was changed to another setting in 3.1, so this needs updating for 3.1:
             - --providers.docker.swarmmode
             - --entrypoints.http.address=:80
             - --entrypoints.https.address=:443
@@ -116,6 +128,7 @@ services:
             #- --log.level=INFO
             - --accesslog
             - --api
+            - --api.dashboard
             - --log
             - --log.filePath=/var/log/traefik/traefik.log
             - --accesslog.filepath=/var/log/traefik/access.log
